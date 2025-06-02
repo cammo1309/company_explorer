@@ -59,12 +59,16 @@ st.markdown(
         color: #FFFFFF;
     }
     /* Style for expander header to make it more visible */
-    .summary-box .st-emotion-cache-10trblm {{ /* This is a common Streamlit expander header class, might change */
+    .summary-box .st-emotion-cache-10trblm { /* This is a common Streamlit expander header class, might change */
         color: #FFFFFF !important;
-    }}
-    .summary-box .st-emotion-cache-10trblm p {{ /* Ensure text within expander header is white */
+    }
+    .summary-box .st-emotion-cache-10trblm p { /* Ensure text within expander header is white */
         color: #FFFFFF !important;
-    }}
+    }
+    .psc-name-large {
+        font-size: 1.1em; /* Slightly larger font for PSC names */
+        font-weight: bold;
+    }
     </style>    
     """,
     unsafe_allow_html=True
@@ -331,27 +335,32 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
         if not pscs_data_current_level["items"]:
             st.markdown(f"{indent_prefix}* No PSCs listed or company is exempt.")
         
-        for psc in pscs_data_current_level["items"]:
+        for i, psc in enumerate(pscs_data_current_level["items"]): # Added enumerate for numbering
+            psc_counter = i + 1 # Start numbering from 1
             psc_name = psc.get("name", "N/A")
             psc_kind = psc.get("kind", "N/A").replace("-", " ").title()
-            st.markdown(f"{indent_prefix}* **{psc_name}** ({psc_kind})")
+            # Using HTML for slightly larger and bold PSC name/kind
+            st.markdown(f"{indent_prefix}{psc_counter}. <span class='psc-name-large'>{psc_name}</span> ({psc_kind})", unsafe_allow_html=True)
+
 
             details_line_psc = []
             if psc.get('nationality'): details_line_psc.append(f"Nat: {psc.get('nationality', 'N/A')}")
             if psc.get('country_of_residence'): details_line_psc.append(f"Res: {psc.get('country_of_residence', 'N/A')}")
-            if details_line_psc: st.markdown(f"{indent_prefix}  * {' | '.join(details_line_psc)}")
+            # Indent subsequent details further to align under the numbered item
+            sub_indent = indent_prefix + "   " # Extra spaces for alignment under number
+            if details_line_psc: st.markdown(f"{sub_indent}* {' | '.join(details_line_psc)}")
 
             natures_of_control = psc.get("natures_of_control", [])
             if natures_of_control:
                 # Make natures of control more compact
                 formatted_natures = [f"`{n.replace('-', ' ').title()}`" for n in natures_of_control]
-                st.markdown(f"{indent_prefix}  * Natures: {', '.join(formatted_natures)}")
+                st.markdown(f"{sub_indent}* Natures: {', '.join(formatted_natures)}")
             else:
-                st.markdown(f"{indent_prefix}  * Natures: N/A")
+                st.markdown(f"{sub_indent}* Natures: N/A")
 
             psc_statement_text = psc.get("statement")
             if psc_statement_text and psc_statement_text.upper() != "NONE":
-                st.markdown(f"{indent_prefix}  * Statement: *{psc_statement_text}*")
+                st.markdown(f"{sub_indent}* Statement: *{psc_statement_text}*")
 
             identification = psc.get("identification")
             corporate_psc_company_number_to_recurse = None
@@ -370,7 +379,7 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
                 if place_reg: id_details_parts.append(f"Place Reg: {place_reg}")
                 
                 if id_details_parts:
-                    st.markdown(f"{indent_prefix}  * ID: {'; '.join(id_details_parts)}")
+                    st.markdown(f"{sub_indent}* ID: {'; '.join(id_details_parts)}")
 
                 if reg_num and psc_kind in ["Corporate Entity Person With Significant Control", "Legal Person Person With Significant Control"]:
                     is_uk_like = False
@@ -381,7 +390,7 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
                     if is_uk_like: corporate_psc_company_number_to_recurse = reg_num.strip().upper()
 
             if corporate_psc_company_number_to_recurse:
-                st.markdown(f"{indent_prefix}  * **--> Further Analysis for {psc_name} (`{corporate_psc_company_number_to_recurse}`):**")
+                st.markdown(f"{sub_indent}* **--> Further Analysis for {psc_name} (`{corporate_psc_company_number_to_recurse}`):**")
                 display_ownership_tree(corporate_psc_company_number_to_recurse, current_depth + 1, visited_companies.copy(), initial_call=False)
     
     elif pscs_data_current_level is None:
