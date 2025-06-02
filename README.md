@@ -2,6 +2,8 @@
 
 A Streamlit web application to explore and visualise the ownership structure of UK Limited Companies based on data from the Companies House API. This tool simplifies the process of understanding complex company structures by providing a clear, hierarchical view of ownership, directly from official filings.
 
+**[Open on Streamlit](https://company-explorer-cb.streamlit.app/)**
+
 ## Features
 
 * Fetches company profile information (name, status, SIC codes, incorporation date).
