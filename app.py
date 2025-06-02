@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import json # For pretty printing JSON if needed for debugging
 import os # For potentially getting API key from environment variables
+from calculator_module import display_shareholding_calculator # Import the calculator function
 
 # --- Page Configuration (must be the first Streamlit command) ---
 st.set_page_config(layout="wide", page_title="UK Company Ownership Explorer")
@@ -68,6 +69,14 @@ st.markdown(
     .psc-name-large {
         font-size: 1.1em; /* Slightly larger font for PSC names */
         font-weight: bold;
+    }
+    /* Style for calculator expander */
+    .calculator-expander .st-emotion-cache-10trblm { /* Expander header */
+        color: #FFFFFF !important;
+        font-weight: bold;
+    }
+    .calculator-expander .st-emotion-cache-10trblm p { /* Expander header text */
+        color: #FFFFFF !important;
     }
     </style>    
     """,
@@ -171,8 +180,8 @@ def get_formatted_relevant_filing_history(company_number):
     
     return relevant_filings_md
 
-# --- Function to generate Markdown summary and calculation guide ---
-def generate_markdown_summary_and_guide(target_company_profile, target_company_pscs):
+# --- Function to generate Markdown summary (excluding the guide) ---
+def generate_markdown_summary(target_company_profile, target_company_pscs):
     if not target_company_profile:
         return "### Company Profile Not Found\nCould not retrieve basic details for the target company."
 
@@ -181,12 +190,12 @@ def generate_markdown_summary_and_guide(target_company_profile, target_company_p
     company_status = target_company_profile.get("company_status", "N/A")
     incorporation_date = target_company_profile.get("date_of_creation", "N/A")
     
-    markdown_output = [f" ## Ownership Summary for: {company_name} ({company_number})\n"]
+    markdown_output = [f"## Ownership Summary for: {company_name} ({company_number})\n"]
     markdown_output.append(f"* **Status:** {company_status}")
     markdown_output.append(f"* **Incorporated:** {incorporation_date}\n")
 
     markdown_output.append("### Key Individuals (PSCs/UBOs) Summary\n")
-    key_individuals_list = [] # To store tuples of (name, role_detail) for concise listing later if needed
+    key_individuals_list = [] 
     
     if target_company_pscs and "items" in target_company_pscs:
         for psc in target_company_pscs["items"]:
@@ -194,7 +203,7 @@ def generate_markdown_summary_and_guide(target_company_profile, target_company_p
             psc_name_display = psc.get('name', 'N/A')
 
             if "Individual" in psc_kind or "Person With Significant Control" in psc_kind and "Corporate" not in psc_kind and "Legal" not in psc_kind:
-                key_individuals_list.append(psc_name_display) # Add to concise list
+                key_individuals_list.append(psc_name_display) 
                 markdown_output.append(f"* **{psc_name_display}** (Direct Individual PSC)")
                 
                 details_line = []
@@ -216,7 +225,7 @@ def generate_markdown_summary_and_guide(target_company_profile, target_company_p
                             sub_psc_kind = sub_psc.get("kind", "").replace("-", " ").title()
                             sub_psc_name_display = sub_psc.get('name', 'N/A')
                             if "Individual" in sub_psc_kind or "Person With Significant Control" in sub_psc_kind and "Corporate" not in sub_psc_kind and "Legal" not in sub_psc_kind:
-                                key_individuals_list.append(sub_psc_name_display) # Add to concise list
+                                key_individuals_list.append(sub_psc_name_display)
                                 markdown_output.append(f"* **{sub_psc_name_display}** (Individual PSC of {corp_psc_name} - `{corp_psc_number}`)")
                                 
                                 sub_details_line = []
@@ -236,56 +245,24 @@ def generate_markdown_summary_and_guide(target_company_profile, target_company_p
     relevant_filings_list = get_formatted_relevant_filing_history(company_number)
     markdown_output.extend(relevant_filings_list)
     markdown_output.append("\n")
-
-    # Guide to Calculating Shareholding Percentages - now in an expander
-    guide_markdown = """
-### Guide to Calculating Shareholding Percentages
-To calculate the precise shareholding percentage for a Person with Significant Control (PSC) or an Ultimate Beneficial Owner (UBO), you generally need two key pieces of information:
-1.  **The exact number of shares held by the individual or entity in a specific share class.**
-2.  **The total number of issued shares for that same specific share class.**
-
-**Formula:**
-```
-Shareholding % = (Number of Shares Held by PSC / Total Issued Shares of that Class) * 100
-```
-
-**How to Find the Information Using This Tool & Companies House:**
-* **Total Issued Shares of that Class:** Review the documents listed under 'Relevant Capital & PSC Filings (Target Company)' above. The most recent 'Statement of Capital' (often part of a CS01 Confirmation Statement or an SH01 form) will detail the share classes, the number of shares allotted for each class, and their nominal value.
-* **Number of Shares Held by PSC:** This is often the most challenging piece to find directly from structured API data for PSCs.
-    * Check the 'Natures of Control' listed for each PSC in the detailed breakdown below. Sometimes, descriptive text accompanying these natures (or in a 'Statement' field) might explicitly mention the number or percentage of shares held (e.g., "Holds 5,000 Ordinary Shares").
-    * The 'Natures of Control' often provide **bands** (e.g., `Ownership Of Shares More Than 25 Percent But Not More Than 50 Percent`). This gives you a range but not an exact figure for calculation.
-    * **Crucially, consult the shareholder information within the latest Confirmation Statement (CS01) or other relevant capital filings listed above.** These documents are the primary source for exact share allocations to individuals and corporate bodies.
-
-**Example Calculation:**
-Suppose from a Statement of Capital (e.g., CS01) you find:
-* `Class: Ordinary, Total Shares Allotted for this Class: 10,000`
-And from the shareholder list in the same CS01 (or an SH01), you find:
-* `PSC 'John Doe' holds 6,000 Ordinary shares.`
-Then, John Doe's shareholding % in Ordinary shares would be:
-`(6,000 / 10,000) * 100 = 60.00%`
-If John Doe's PSC 'Nature of Control' only stated `Ownership Of Shares More Than 50 Percent But Not More Than 75 Percent`, this confirms the range, but the CS01/SH01 provides the exact figure for the precise percentage.
-    """
-    # This will be added to the Streamlit layout using st.expander directly for better control
     
-    return "\n".join(markdown_output), guide_markdown
+    return "\n".join(markdown_output)
 
 
 # --- Main Function to Process and Display Ownership Tree ---
 def display_ownership_tree(company_number, current_depth, visited_companies, initial_call=True):
     if current_depth > MAX_DEPTH:
-        # Tighter indentation for this message
         st.markdown(f"{'  ' * current_depth}* *Reached max analysis depth ({MAX_DEPTH} levels).*")
         return
 
     normalised_company_number = str(company_number).strip().upper()
 
-    # For initial call, visited_companies is fresh. For recursive, it's passed down.
     if normalised_company_number in visited_companies and not initial_call:
         st.markdown(f"{'  ' * current_depth}* *Already processed {normalised_company_number} in this query.*")
         return
     
     visited_companies.add(normalised_company_number)
-    indent_prefix = "  " * current_depth # Tighter indentation (2 spaces per level)
+    indent_prefix = "  " * current_depth 
 
     profile_url = f"{BASE_URL}/company/{normalised_company_number}"
     profile_data = make_api_request(profile_url, normalised_company_number)
@@ -294,15 +271,16 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
         st.markdown(f"{indent_prefix}* **Company:** {normalised_company_number} (Could not retrieve profile data)")
         return
 
+    pscs_data_top_level = None # Define before conditional assignment
     if initial_call:
         pscs_url = f"{BASE_URL}/company/{normalised_company_number}/persons-with-significant-control"
         pscs_data_top_level = make_api_request(pscs_url, normalised_company_number)
         
-        summary_markdown_text, guide_markdown_text = generate_markdown_summary_and_guide(profile_data, pscs_data_top_level)
+        summary_markdown_text = generate_markdown_summary(profile_data, pscs_data_top_level)
         
         st.markdown(f"<div class='summary-box'>{summary_markdown_text}</div>", unsafe_allow_html=True)
-        with st.expander("Show Guide to Calculating Shareholding %", expanded=False):
-            st.markdown(guide_markdown_text, unsafe_allow_html=True) # unsafe_allow_html for potential markdown in guide
+        # Display calculator here, passing pscs_data_top_level for the dropdown
+        display_shareholding_calculator(pscs_data_top_level) # Imported function
 
         st.markdown("--- \n ## Detailed Ownership Structure \n ---")
     
@@ -323,10 +301,9 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
                 st.markdown(f"{indent_prefix}* Jurisdiction: {jurisdiction}")
 
     pscs_data_current_level = None
-    # Use already fetched pscs_data_top_level for the initial call's PSC listing in the tree
-    if initial_call and 'pscs_data_top_level' in locals() and pscs_data_top_level:
+    if initial_call and pscs_data_top_level: # Use already fetched data
         pscs_data_current_level = pscs_data_top_level
-    elif not initial_call: # Fetch for deeper levels
+    elif not initial_call: 
         pscs_url = f"{BASE_URL}/company/{normalised_company_number}/persons-with-significant-control"
         pscs_data_current_level = make_api_request(pscs_url, normalised_company_number)
 
@@ -335,24 +312,20 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
         if not pscs_data_current_level["items"]:
             st.markdown(f"{indent_prefix}* No PSCs listed or company is exempt.")
         
-        for i, psc in enumerate(pscs_data_current_level["items"]): # Added enumerate for numbering
-            psc_counter = i + 1 # Start numbering from 1
+        for i, psc in enumerate(pscs_data_current_level["items"]): 
+            psc_counter = i + 1 
             psc_name = psc.get("name", "N/A")
             psc_kind = psc.get("kind", "N/A").replace("-", " ").title()
-            # Using HTML for slightly larger and bold PSC name/kind
             st.markdown(f"{indent_prefix}{psc_counter}. <span class='psc-name-large'>{psc_name}</span> ({psc_kind})", unsafe_allow_html=True)
-
 
             details_line_psc = []
             if psc.get('nationality'): details_line_psc.append(f"Nat: {psc.get('nationality', 'N/A')}")
             if psc.get('country_of_residence'): details_line_psc.append(f"Res: {psc.get('country_of_residence', 'N/A')}")
-            # Indent subsequent details further to align under the numbered item
-            sub_indent = indent_prefix + "   " # Extra spaces for alignment under number
+            sub_indent = indent_prefix + "   " 
             if details_line_psc: st.markdown(f"{sub_indent}* {' | '.join(details_line_psc)}")
 
             natures_of_control = psc.get("natures_of_control", [])
             if natures_of_control:
-                # Make natures of control more compact
                 formatted_natures = [f"`{n.replace('-', ' ').title()}`" for n in natures_of_control]
                 st.markdown(f"{sub_indent}* Natures: {', '.join(formatted_natures)}")
             else:
@@ -386,7 +359,7 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
                     uk_keywords = ["united kingdom", "england", "wales", "scotland", "northern ireland", "companies house", "great britain"]
                     if country_reg and any(keyword in country_reg.lower() for keyword in uk_keywords): is_uk_like = True
                     elif place_reg and any(keyword in place_reg.lower() for keyword in uk_keywords): is_uk_like = True
-                    elif not country_reg and not place_reg and len(reg_num) > 0: is_uk_like = True # Assume UK if no jurisdiction but has reg_num
+                    elif not country_reg and not place_reg and len(reg_num) > 0: is_uk_like = True 
                     if is_uk_like: corporate_psc_company_number_to_recurse = reg_num.strip().upper()
 
             if corporate_psc_company_number_to_recurse:
@@ -398,7 +371,7 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
     else:
         st.markdown(f"{indent_prefix}* No PSC data in expected format or company is exempt.")
     
-    if not initial_call or current_depth > 0: # Add separator for sub-entities or if top level has PSCs listed in tree.
+    if not initial_call or current_depth > 0: 
         st.markdown(f"{indent_prefix}---")
 
 
@@ -422,7 +395,7 @@ company_number_input = st.text_input(
 with st.form(key="company_search_form"):
     search_button_pressed = st.form_submit_button("🔍 Get Ownership Details")
 
-if search_button_pressed: # This block now runs if the button is clicked OR Enter is pressed in the text input
+if search_button_pressed: 
     if company_number_input:
         cleaned_company_number = company_number_input.strip().upper()
         if not (len(cleaned_company_number) == 8 or (len(cleaned_company_number) > 1 and cleaned_company_number[:2].isalpha() and cleaned_company_number[2:].isdigit())):
