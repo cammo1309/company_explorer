@@ -7,6 +7,15 @@ from calculator_module import display_shareholding_calculator # Import the calcu
 # --- Page Configuration (must be the first Streamlit command) ---
 st.set_page_config(layout="wide", page_title="UK Company Ownership Explorer")
 
+# --- Initialize Session State ---
+if 'search_performed' not in st.session_state:
+    st.session_state.search_performed = False
+if 'company_number_searched' not in st.session_state:
+    st.session_state.company_number_searched = None
+if 'psc_data_for_calculator' not in st.session_state: # To store PSC data for the calculator
+    st.session_state.psc_data_for_calculator = None
+
+
 # --- Custom CSS for Background and Text Colour ---
 st.markdown(
     """
@@ -271,16 +280,13 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
         st.markdown(f"{indent_prefix}* **Company:** {normalised_company_number} (Could not retrieve profile data)")
         return
 
-    pscs_data_top_level = None # Define before conditional assignment
+    # pscs_data_top_level is now retrieved and stored in session_state before this function is called for the first time.
+    # For subsequent calls (deeper in the tree), it's fetched as pscs_data_current_level.
     if initial_call:
-        pscs_url = f"{BASE_URL}/company/{normalised_company_number}/persons-with-significant-control"
-        pscs_data_top_level = make_api_request(pscs_url, normalised_company_number)
-        
-        summary_markdown_text = generate_markdown_summary(profile_data, pscs_data_top_level)
-        
+        # Use the psc_data_for_calculator from session state for the summary and calculator
+        summary_markdown_text = generate_markdown_summary(profile_data, st.session_state.psc_data_for_calculator)
         st.markdown(f"<div class='summary-box'>{summary_markdown_text}</div>", unsafe_allow_html=True)
-        # Display calculator here, passing pscs_data_top_level for the dropdown
-        display_shareholding_calculator(pscs_data_top_level) # Imported function
+        display_shareholding_calculator(st.session_state.psc_data_for_calculator) # Imported function
 
         st.markdown("--- \n ## Detailed Ownership Structure \n ---")
     
@@ -301,8 +307,8 @@ def display_ownership_tree(company_number, current_depth, visited_companies, ini
                 st.markdown(f"{indent_prefix}* Jurisdiction: {jurisdiction}")
 
     pscs_data_current_level = None
-    if initial_call and pscs_data_top_level: # Use already fetched data
-        pscs_data_current_level = pscs_data_top_level
+    if initial_call: 
+        pscs_data_current_level = st.session_state.psc_data_for_calculator # Use already fetched data
     elif not initial_call: 
         pscs_url = f"{BASE_URL}/company/{normalised_company_number}/persons-with-significant-control"
         pscs_data_current_level = make_api_request(pscs_url, normalised_company_number)
@@ -385,26 +391,45 @@ Enter a company number to begin.
 * Data is retrieved live from the Companies House API.
 """)
 
-company_number_input = st.text_input(
-    "Enter UK Company Number:",
-    "", 
-    help="Enter the 8-character company number (e.g., 03877012 or SC123456 for Scottish companies)."
-)
-
 # Use a form for the input and button
 with st.form(key="company_search_form"):
+    company_number_input_val = st.text_input( # Renamed variable to avoid potential conflict
+        "Enter UK Company Number:",
+        "", 
+        help="Enter the 8-character company number (e.g., 03877012 or SC123456 for Scottish companies)."
+    )
     search_button_pressed = st.form_submit_button("🔍 Get Ownership Details")
 
 if search_button_pressed: 
-    if company_number_input:
-        cleaned_company_number = company_number_input.strip().upper()
+    if company_number_input_val: # Use the new variable name here
+        cleaned_company_number = company_number_input_val.strip().upper() # And here
         if not (len(cleaned_company_number) == 8 or (len(cleaned_company_number) > 1 and cleaned_company_number[:2].isalpha() and cleaned_company_number[2:].isdigit())):
             st.warning("Please enter a valid UK company number format (e.g., 8 digits like 01234567, or SC123456).")
+            st.session_state.search_performed = False # Reset on invalid format
+            st.session_state.company_number_searched = None
+            st.session_state.psc_data_for_calculator = None
         else:
-            with st.spinner(f"Fetching details for {cleaned_company_number}... This may take a moment for complex structures."):
-                display_ownership_tree(cleaned_company_number, 0, set(), initial_call=True)
+            # Set session state to indicate a search is being performed with this number
+            st.session_state.search_performed = True
+            st.session_state.company_number_searched = cleaned_company_number
+            # Fetch PSC data here and store in session state for the calculator and initial tree display
+            pscs_url = f"{BASE_URL}/company/{cleaned_company_number}/persons-with-significant-control"
+            st.session_state.psc_data_for_calculator = make_api_request(pscs_url, cleaned_company_number)
+            # No need to call display_ownership_tree here, it will be called below based on session state
     else:
         st.warning("Please enter a company number.")
+        st.session_state.search_performed = False # Reset if search is empty
+        st.session_state.company_number_searched = None
+        st.session_state.psc_data_for_calculator = None
+
+# This block now controls the display of results based on session state
+if st.session_state.search_performed and st.session_state.company_number_searched:
+    # Add a spinner here if the data fetch within display_ownership_tree is substantial
+    # However, primary data for summary is already fetched if search_button_pressed was true.
+    # The spinner here will cover the rendering and any deeper fetches in display_ownership_tree.
+    with st.spinner(f"Rendering details for {st.session_state.company_number_searched}..."):
+        display_ownership_tree(st.session_state.company_number_searched, 0, set(), initial_call=True)
+
 
 st.markdown("---")
 st.markdown("<p style='font-size:0.9em;'>Disclaimer: This tool provides data from the Companies House API. Accuracy depends on company filings. For official use, always verify information directly with Companies House.</p>", unsafe_allow_html=True)
