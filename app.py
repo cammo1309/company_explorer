@@ -181,7 +181,7 @@ def generate_markdown_summary_and_guide(target_company_profile, target_company_p
     company_status = target_company_profile.get("company_status", "N/A")
     incorporation_date = target_company_profile.get("date_of_creation", "N/A")
     
-    markdown_output = ["## Ownership Summary for: {company_name} ({company_number})\n"]
+    markdown_output = [f" ## Ownership Summary for: {company_name} ({company_number})\n"]
     markdown_output.append(f"* **Status:** {company_status}")
     markdown_output.append(f"* **Incorporated:** {incorporation_date}\n")
 
